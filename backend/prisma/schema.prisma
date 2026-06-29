@@ -1,0 +1,141 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMINISTRATOR
+  RESEARCHER
+  HISTORIAN
+  EDITOR
+  CONTRIBUTOR
+  GUEST
+}
+
+enum DocStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         Role          @default(GUEST)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  profile      Profile?
+  auditLogs    AuditLog[]
+  documents    Document[]    @relation("UploadedDocs")
+  approvedDocs Document[]    @relation("ApprovedDocs")
+  leaders      Leader[]      @relation("CreatedLeaders")
+  events       HistoricalEvent[] @relation("CreatedEvents")
+}
+
+model Profile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stateOfOrigin String?
+  lga           String?
+  biography     String?  @db.Text
+  avatarUrl     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Leader {
+  id            String                 @id @default(uuid())
+  fullName      String
+  photograph    String?
+  politicalParty String
+  position      String
+  officeHeld    String
+  startDate     DateTime
+  endDate       DateTime?
+  biography     String                 @db.Text
+  achievements  String                 @db.Text
+  policies      String                 @db.Text
+  stateOfOrigin String                 @default("Abia State")
+  lga           String
+  status        String                 @default("Active")
+  
+  predecessorId String?
+  predecessor   Leader?                @relation("Succession", fields: [predecessorId], references: [id])
+  successors    Leader[]               @relation("Succession")
+
+  createdById   String
+  createdBy     User                   @relation("CreatedLeaders", fields: [createdById], references: [id])
+  
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  events        LeaderEventRelation[]
+}
+
+model HistoricalEvent {
+  id          String                 @id @default(uuid())
+  title       String
+  description String                 @db.Text
+  category    String
+  date        DateTime
+  location    String
+  latitude    Float
+  longitude   Float
+  image       String?
+  createdById String
+  createdBy   User                   @relation("CreatedEvents", fields: [createdById], references: [id])
+  
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  leaders     LeaderEventRelation[]
+}
+
+model LeaderEventRelation {
+  leaderId String
+  leader   Leader   @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+  eventId  String
+  event    HistoricalEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([leaderId, eventId])
+}
+
+model Document {
+  id             String    @id @default(uuid())
+  title          String
+  description    String    @db.Text
+  fileUrl        String
+  fileType       String
+  fileSize       Int
+  category       String
+  status         DocStatus @default(PENDING_APPROVAL)
+  version        Int       @default(1)
+  
+  uploaderId     String
+  uploader       User      @relation("UploadedDocs", fields: [uploaderId], references: [id])
+  approvedById   String?
+  approvedBy     User?     @relation("ApprovedDocs", fields: [approvedById], references: [id])
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  details   String   @db.Text
+  ipAddress String?
+  timestamp DateTime @default(now())
+}
